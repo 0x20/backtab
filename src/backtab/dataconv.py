@@ -50,6 +50,10 @@ product_types = dict(
     WATER="Water",
 )
 
+DONT_CLOSE={
+    # Alex's account gets reused later
+    "Liabilities:Bar:Members:Alex",
+}
 
 def to_decimal(number: typing.Union[str, float, int, bcdata.Decimal]) -> bcdata.Decimal:
     if type(number) is not str:
@@ -87,20 +91,50 @@ class Processor:
     entries: typing.List[bcdata.Transaction]
     initial_balances: typing.Dict[str, bcdata.Decimal]
     last_assertion: typing.Dict[str, datetime.date]
-    balance_assertions: typing.List[bcdata.Directive]
+    accounts_by_id: typing.Dict[int, str]
     line: int = 0
 
     def __init__(self):
         self.entries = []
         self.initial_balances = dict()
         self.last_assertion = dict()
-        self.balance_assertions = []
+        self.accounts_by_id = {}
 
-    def get_member(self, name, date, balance):
-        name = member_account(name)
-        if name not in self.initial_balances:
+
+    def get_member(self, id, name, date, balance):
+        #name = member_account(name)
+        name = self.accounts_by_id[id]
+        if id in self.accounts_by_id and self.accounts_by_id[id] != name:
+            # Generate rename
+            txn = bcdata.Transaction(
+                meta={},
+                date=date,
+                flag="txn",
+                payee="",
+                narration="Rename %(from)s to %(to)s" % {
+                    "from": self.accounts_by_id[id],
+                    "to": name,
+                },
+                tags=set("rename"),
+                links=set(),
+                postings=[])
+            bcdata.create_simple_posting(txn, self.accounts_by_id[id], balance, "EUR")
+            bcdata.create_simple_posting(txn, name, -balance, "EUR")
+            self.entries.append(txn)
+            if self.accounts_by_id[id] not in DONT_CLOSE:
+                self.entries.append(bcdata.Close(
+                    meta={},
+                    date=date+datetime.timedelta(days=1),
+                    account=self.accounts_by_id[id],
+                ))
+            # Disable the balance assertion for the next day
+            self.last_assertion[name] = date
+            self.initial_balances[name] = None
+            self.accounts_by_id[id] = name
+        elif name not in self.initial_balances:
             self.initial_balances[name] = balance
             self.last_assertion[name] = date
+            self.accounts_by_id[id] = name
         elif self.last_assertion.get(name, None) != date and name != "Assets:Cash:Bar":
             self.entries.append(bcdata.Balance(
                 {"iline": str(self.line)}, date, name, bcdata.Amount(-balance, "EUR"),
@@ -117,14 +151,15 @@ class Processor:
 
         assert len(entry["takefrom"]) == 1, "More than one account in takefrom"
 
-        initial_balance = to_decimal(entry["takefrom"][0]["account_money"])
-        account_name = self.get_member(entry["takefrom"][0]["account_name"], txn.date, initial_balance)
+        takefrom = entry["takefrom"][0]
+        initial_balance = to_decimal(takefrom["account_money"])
+        account_name = self.get_member(takefrom["account_id"], takefrom["account_name"], txn.date, initial_balance)
 
         bcdata.create_simple_posting(txn, account_name, amount, "EUR")
         bcdata.create_simple_posting(txn, "Income:Bar", -amount, "EUR")
         if "giveto" in entry:
             for giveto in entry["giveto"]:
-                giveto_account = self.get_member(giveto["account_name"], txn.date,
+                giveto_account = self.get_member(giveto["account_id"], giveto["account_name"], txn.date,
                                                  to_decimal(giveto["account_money"]))
                 giveto_amount = to_decimal(giveto["account_money_give"])
                 bcdata.create_simple_posting(txn, giveto_account, -giveto_amount, "EUR")
@@ -136,9 +171,10 @@ class Processor:
     def process_deposit(self, entry):
         txn = new_txn(entry)
         assert len(entry["giveto"]) == 1, "More than one giveto action in an entry"
-        amount = to_decimal(entry["giveto"][0]["give"])
-        initial_balance = to_decimal(entry["giveto"][0]['account_money'])
-        account = self.get_member(entry["giveto"][0]["account_name"], txn.date, initial_balance)
+        giveto = entry["giveto"][0]
+        amount = to_decimal(giveto["give"])
+        initial_balance = to_decimal(giveto['account_money'])
+        account = self.get_member(giveto["account_id"], giveto["account_name"], txn.date, initial_balance)
 
         bcdata.create_simple_posting(txn, account, -amount, "EUR")
         bcdata.create_simple_posting(txn, "Assets:Cash:Bar", amount, "EUR")
@@ -156,11 +192,19 @@ class Processor:
             return proc(entry)
 
     def process_json(self, json):
+        # Start by computing account IDs
+        for entry in json:
+            for acct in entry.get("giveto", []) + entry.get("takefrom", []):
+                self.accounts_by_id[acct["account_id"]] = member_account(acct["account_name"])
         for entry in json:
             self.process_entry(entry)
 
     def transfer_opening_balances(self):
         for account, balance in self.initial_balances.items():
+            if balance is None:
+                continue
+            if balance == 0:
+                continue
             txn = bcdata.Transaction(
                 meta={},
                 date=datetime.date(1970,1,1),
@@ -182,7 +226,6 @@ class Processor:
         opening_balances = list(self.transfer_opening_balances())
         entries = self.entries
 
-        print('include "../static/includes.beancount"')
         beancount.parser.printer.print_entries(opening_balances + entries)
 
 
