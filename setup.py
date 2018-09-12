@@ -10,7 +10,8 @@ setuptools.setup(
     package_dir = {"": "src"},
     entry_points = {
         'console_scripts': [
-            "backtab-import-spacebar = backtab.dataconv:main"
+            "backtab-import-spacebar = backtab.dataconv:main",
+            "backtab-server = backtab.server:main",
         ]
     },
     install_requires=[

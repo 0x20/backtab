@@ -1,0 +1,4 @@
+http:
+        listen: '127.0.0.1'
+        port: 6502
+datadir: /home/thequux/PycharmProjects/tab/tab-data
