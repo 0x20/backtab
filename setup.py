@@ -17,8 +17,9 @@ setuptools.setup(
     install_requires=[
         "bottle ~= 0.12",
         "PyYAML ~= 3.13",
+        "beancount",
     ],
     dependency_links=[
-        "hg+https://bitbucket.org/blais/beancount",
+        "hg+https://bitbucket.org/blais/beancount#egg=beancount",
     ],
 )
