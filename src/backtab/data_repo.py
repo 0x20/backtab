@@ -37,15 +37,15 @@ class Member:
     balance: decimal.Decimal
 
     def __init__(self, account):
-        acct_name = account.split(":")
-        if acct_name == "Assets:Cash:Bar":
+        account_parts = account.split(":")
+        if account == "Assets:Cash:Bar":
             self.display_name = "--CASH--"
             self.internal_name = "--cash--"
-        elif len(acct_name) != 4:
-            raise ValueError("Member account should have four components")
+        elif len(account_parts) != 4:
+            raise ValueError("Member account should have four components", account)
         else:
-            self.display_name = self.internal_name = acct_name[-1]
-        self.account = acct_name
+            self.display_name = self.internal_name = account_parts[-1]
+        self.account = account
         self.balance = decimal.Decimal("0.00")
 
 
@@ -98,10 +98,11 @@ class RepoData:
     @transaction()
     def pull_changes(self):
         """Pull the latest changes from the upstream git repo"""
-        subprocess.run("git fetch origin", cwd=SERVER_CONFIG.DATA_DIR)
+        subprocess.run(["git", "fetch", "origin"], cwd=SERVER_CONFIG.DATA_DIR)
         try:
             subprocess.run("git merge --no-edit origin/master "
-                           "|| {git merge --abort; false; }",
+                           "|| ( git merge --abort; false; )",
+                           shell=True,
                            cwd=SERVER_CONFIG.DATA_DIR,
                            stderr=subprocess.PIPE,
                            check=True)
@@ -123,7 +124,7 @@ class RepoData:
         import yaml
 
         products = {}
-        with open(os.path.join(SERVER_CONFIG.DATA_DIR, "static", "products.yaml"), "rt") as f:
+        with open(os.path.join(SERVER_CONFIG.DATA_DIR, "static", "products.yml"), "rt") as f:
             raw_products = yaml.load(f)
         if type(raw_products) != list:
             raise TypeError("Products should be a list")
@@ -158,6 +159,7 @@ class RepoData:
                 continue
             if entry.account not in balances:
                 print("Didn't load %s as no balance found" % (entry.account,))
+                continue
             acct = Member(entry.account)
             if "display_name" in entry.meta:
                 acct.display_name = entry.meta["display_name"]

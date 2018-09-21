@@ -1,10 +1,10 @@
 import bottle
 import yaml
 from backtab.config import SERVER_CONFIG
-from backtab.data_repo import REPO_DATA
+from backtab.data_repo import REPO_DATA, UpdateFailed
 import os.path
 import threading
-
+import traceback
 
 api = bottle.Bottle()
 
@@ -15,6 +15,27 @@ def products():
         name: product.to_json()
         for name, product in REPO_DATA.products.items()
     }
+
+
+@api.get("/accounts")
+def accounts():
+    return {
+        name: {
+            "display_name": member.display_name,
+            # The balance is negative in the ledger, because the accounts are seen from the hackerspace's viewpoint
+            "balance": str(-member.balance),
+        }
+        for name, member in REPO_DATA.accounts.items()
+    }
+
+@api.get("/admin/update")
+def update():
+    try:
+        REPO_DATA.pull_changes()
+        return "Success"
+    except UpdateFailed as e:
+        raise bottle.HTTPResponse(body=traceback.format_exc())
+
 
 
 def main():
