@@ -1,5 +1,6 @@
 from backtab.config import SERVER_CONFIG
 import contextlib
+import datetime
 import decimal
 import os.path
 import subprocess
@@ -91,16 +92,72 @@ class Product:
         }
 
 
+class Transaction:
+    txn: beancount.core.data.Transaction
+
+    def __init__(self,
+                 title: str=None,
+                 date: typing.Optional[datetime.datetime]=None,
+                 meta: typing.Optional[typing.Dict[str, str]]=None):
+        if meta is None:
+            meta = {}
+        if date is None:
+            date = datetime.datetime.utcnow()
+        if isinstance(date, datetime.datetime):
+            meta.update(
+                timestamp = str(datetime.datetime.utcnow()),
+            )
+            date = date.date()
+        if title is None:
+            raise TypeError("Title must be provided for a transaction")
+        self.txn = beancount.core.data.Transaction(
+            meta, date,
+            flag = "txn",
+            payee=None,
+            narration=title
+        )
+
+class BuyTxn(Transaction):
+    buyer: Member
+
+    def __init__(self, buyer: Member, date: typing.Optional[datetime.datetime]):
+        super(BuyTxn, self).__init__(title = "%s bought some stuff" % buyer.display_name,
+                                     date=date,
+                                     meta={
+                                         "type": "purchase",
+                                     })
+        self.buyer = buyer
+
+    def add_product(self, product, quantity=1):
+        beancount.core.data.create_simple_posting(
+            self.txn, "Assets:"
+        )
+
 class RepoData:
     accounts: typing.Dict[str, Member]
     products: typing.Dict[str, Product]
 
+    # Invariants:
+    # instance_ledger_name: the relative path from the data root to the active
+    #    ledger file. Does not change once created
+    # instance_ledger: The actual ledger file. Closed and set to None whenever
+    #    the underlying file may have changed; opened when needed
+    instance_ledger_name: typing.Optional[str]
+    instance_ledger: io.FileIO
+
+    def __init__(self):
+        self.instance_ledger_name = None
+        self.instance_ledger = None
+
     @transaction()
     def pull_changes(self):
         """Pull the latest changes from the upstream git repo"""
-        subprocess.run(["git", "fetch", "origin"], cwd=SERVER_CONFIG.DATA_DIR)
+        if self.instance_ledger is not None:
+            self.instance_ledger.close()
+            self.instance_ledger = None
+
         try:
-            subprocess.run("git merge --no-edit origin/master "
+            subprocess.run("git pull --no-edit "
                            "|| ( git merge --abort; false; )",
                            shell=True,
                            cwd=SERVER_CONFIG.DATA_DIR,
@@ -118,6 +175,57 @@ class RepoData:
             # Rollback
             subprocess.run(["git", "checkout", "@{-1}"], check=True)
             raise UpdateFailed("Failed to reload data") from e
+
+    def add_file(self, filename: str):
+        subprocess.run(["git", "add", filename],
+                       cwd=SERVER_CONFIG.DATA_DIR,
+                       check=True)
+
+    @contextlib.contextmanager
+    def git_transaction(self):
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"],
+                                       cwd=SERVER_CONFIG.DATA_DIR)
+        try:
+            # TODO: fetch first?
+            yield
+            subprocess.run(["git", "push"],
+                           cwd=SERVER_CONFIG.DATA_DIR,
+                           check=True)
+        except Exception:
+            # Rollback
+            subprocess.run(["git", "reset", "--hard", head],
+                           cwd=SERVER_CONFIG.DATA_DIR,
+                           check=True)
+            raise
+
+    def open_instance_ledger(self):
+        if self.instance_ledger is not None:
+            return self.instance_ledger
+        while self.instance_ledger_name is not None:
+            import datetime
+            import socket
+            trial_name = "%(hostname)s_%(date)s.beancount" % {
+                "hostname": socket.gethostname(),
+                "date": datetime.datetime.now(datetime.timezone.utc),
+            }
+            with self.git_transaction():
+                try:
+                    path = os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", trial_name)
+                    with open(path, "xt"):
+                        pass
+                    self.instance_ledger_name = path
+                except FileExistsError:
+                    import time
+                    time.sleep(1)
+                    continue
+                else:
+                    # We have an instance ledger; add it to git and push
+                    with open(os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", "dynamic.beancount"), "at") as dynamic:
+                        dynamic.write('include "%s"\n' % trial_name)
+                    self.add_file(os.path.join("ledger", trial_name))
+                    self.add_file(os.path.join("ledger", "dynamic.beancount"))
+        self.instance_ledger = open(self.instance_ledger_name, "at")
+        return self.instance_ledger
 
     @transaction()
     def load_data(self):
@@ -169,6 +277,11 @@ class RepoData:
         # That's all the data loaded; now we update this class's fields
         self.accounts = accounts
         self.products = products
+
+    def close_instance_ledger(self):
+        if self.instance_ledger is not None:
+            self.instance_ledger.close()
+            self.instance_ledger = None
 
 
 REPO_DATA = RepoData()
