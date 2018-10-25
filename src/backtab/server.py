@@ -1,6 +1,8 @@
 import bottle
+import decimal
 import yaml
 from backtab.config import SERVER_CONFIG
+from backtab import data_repo
 from backtab.data_repo import REPO_DATA, UpdateFailed
 import os.path
 import threading
@@ -28,6 +30,7 @@ def accounts():
         for name, member in REPO_DATA.accounts.items()
     }
 
+
 @api.get("/admin/update")
 def update():
     try:
@@ -36,6 +39,16 @@ def update():
     except UpdateFailed as e:
         raise bottle.HTTPResponse(body=traceback.format_exc())
 
+
+@api.post("/txn/deposit")
+def deposit():
+    json = bottle.request.json
+    txn = data_repo.DepositTxn(
+        member=REPO_DATA.accounts[json[""]],
+        amount =decimal.Decimal(json["amount"]),
+    )
+
+    REPO_DATA.apply_txn(txn)
 
 
 def main():

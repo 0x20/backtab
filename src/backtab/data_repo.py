@@ -6,7 +6,7 @@ import os.path
 import subprocess
 import threading
 import typing
-import beancount.core.data
+import beancount.core.data as bcdata
 import beancount.loader
 import beancount.parser.printer
 import beancount.query.query
@@ -14,6 +14,8 @@ import collections
 import io
 
 repo_lock = threading.RLock()
+
+CASH_ACCT = "Assets:Cash:Bar"
 
 
 @contextlib.contextmanager
@@ -93,7 +95,7 @@ class Product:
 
 
 class Transaction:
-    txn: beancount.core.data.Transaction
+    txn: bcdata.Transaction
 
     def __init__(self,
                  title: str=None,
@@ -110,28 +112,80 @@ class Transaction:
             date = date.date()
         if title is None:
             raise TypeError("Title must be provided for a transaction")
-        self.txn = beancount.core.data.Transaction(
+        self.txn = bcdata.Transaction(
             meta, date,
             flag = "txn",
             payee=None,
             narration=title
         )
 
-class BuyTxn(Transaction):
-    buyer: Member
 
-    def __init__(self, buyer: Member, date: typing.Optional[datetime.datetime]):
+class BuyTxn(Transaction):
+    def __init__(self, buyer: Member, products: typing.List[typing.Tuple[Product, int]], date: typing.Optional[datetime.datetime]=None):
         super(BuyTxn, self).__init__(title = "%s bought some stuff" % buyer.display_name,
                                      date=date,
                                      meta={
                                          "type": "purchase",
                                      })
         self.buyer = buyer
+        charge = decimal.Decimal("0.00")
+        paybacks = collections.defaultdict(lambda: decimal.Decimal("0.00"))
 
-    def add_product(self, product, quantity=1):
-        beancount.core.data.create_simple_posting(
-            self.txn, "Assets:"
+        for product, qty in products:
+            charge += product.price * qty
+            if product.payback is not None:
+                paybacks[product.payback.account] += product.payback.amount * qty
+            bcdata.create_simple_posting(
+                self.txn, "Assets:Inventory:Bar",
+                -qty, product.currency)
+            bcdata.create_simple_posting(
+                self.txn, buyer.account,
+                qty, product.currency
+            )
+        bcdata.create_simple_posting(
+            self.txn, buyer.account,
+            charge, "EUR"
         )
+        for payee,amt in paybacks.items():
+            bcdata.create_simple_posting(
+                self.txn, payee,
+                -amt, "EUR"
+            )
+            charge -= amt
+        bcdata.create_simple_posting(
+            self.txn, "Income:Bar",
+            -charge, "EUR",
+        )
+
+
+class TransferTxn(Transaction):
+    def __init__(self, payer: Member, payee: Member, amount: decimal.Decimal, date: typing.Optional[datetime.datetime]=None):
+        super(TransferTxn, self).__init__(
+            title = "%s gave %s a gift of €%s" %(payer.display_name, payee.display_name, amount) ,
+            date=date,
+            meta={
+                 "type": "transfer",
+            })
+        bcdata.create_simple_posting(
+            self.txn, payer.account, -amount, "EUR")
+        bcdata.create_simple_posting(
+            self.txn, payee.account,  amount, "EUR")
+
+
+class DepositTxn(Transaction):
+    def __init__(self, member: Member, amount: decimal.Decimal, date: typing.Optional[datetime.datetime]=None):
+        super(DepositTxn, self).__init__(
+            title = "%s gave %s a gift of €%s" %(payer.display_name, payee.display_name, amount) ,
+            date=date,
+            meta={
+                 "type": "deposit",
+            })
+
+        bcdata.create_simple_posting(
+            self.txn, member.account, -amount, "EUR")
+        bcdata.create_simple_posting(
+            self.txn, CASH_ACCT,  amount, "EUR")
+
 
 class RepoData:
     accounts: typing.Dict[str, Member]
@@ -227,6 +281,9 @@ class RepoData:
         self.instance_ledger = open(self.instance_ledger_name, "at")
         return self.instance_ledger
 
+    def apply_txn(self, txn: Transaction):
+        pass
+
     @transaction()
     def load_data(self):
         import yaml
@@ -263,7 +320,7 @@ class RepoData:
                 """)[1]
         }
         for entry in ledger_data:
-            if not isinstance(entry, beancount.core.data.Open):
+            if not isinstance(entry, bcdata.Open):
                 continue
             if entry.account not in balances:
                 print("Didn't load %s as no balance found" % (entry.account,))
