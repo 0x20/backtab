@@ -1,11 +1,10 @@
 import bottle
 import decimal
-import yaml
 from backtab.config import SERVER_CONFIG
 from backtab import data_repo
 from backtab.data_repo import REPO_DATA, UpdateFailed
-import os.path
-import threading
+from functools import wraps
+import typing
 import traceback
 
 api = bottle.Bottle()
@@ -41,19 +40,53 @@ def update():
         raise bottle.HTTPResponse(body=traceback.format_exc())
 
 
+def json_txn_method(fn: typing.Callable[[typing.Dict], data_repo.Transaction]):
+    @wraps(fn)
+    def result():
+        txn = fn(bottle.request.json)
+        member_deltas = REPO_DATA.apply_txn(txn)
+        return {
+            "members": {
+                member.internal_name: str(-member.balance_eur)
+                for member in member_deltas
+            },
+            "message": txn.beancount_txn.narration,
+        }
+    return result
+
+
 @api.post("/txn/deposit")
-def deposit():
-    json = bottle.request.json
-    txn = data_repo.DepositTxn(
+@json_txn_method
+def deposit(json):
+    return data_repo.DepositTxn(
         member=REPO_DATA.accounts[json["member"]],
-        amount =decimal.Decimal(json["amount"]),
+        amount=decimal.Decimal(json["amount"]),
     )
 
-    REPO_DATA.apply_txn(txn)
+
+@api.post("/txn/deposit")
+@json_txn_method
+def transfer(json):
+    return data_repo.TransferTxn(
+        payer=REPO_DATA.accounts[json["payer"]],
+        payee=REPO_DATA.accounts[json["payee"]],
+        amount=decimal.Decimal(json["amount"]),
+    )
+
+
+@api.post("/txn/buy")
+@json_txn_method
+def buy(json):
+    return data_repo.BuyTxn(
+        buyer=REPO_DATA.accounts[json["member"]],
+        products=[
+            (REPO_DATA.products[product], count)
+            for product, count in json["products"].items()
+        ],
+    )
 
 
 def main():
-
     # Load config
     SERVER_CONFIG.load_from_config("config.yml")
     REPO_DATA.pull_changes()

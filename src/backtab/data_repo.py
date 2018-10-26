@@ -88,6 +88,8 @@ class Product:
                 account=definition["payback"]["account"],
                 amount=parse_price(definition["payback"]["amount"]),
             )
+        else:
+            self.payback = None
 
     def to_json(self) -> typing.Dict:
         """Return the JSON form for clients. This does not include payback
@@ -226,19 +228,15 @@ class RepoData:
     # instance_ledger: The actual ledger file. Closed and set to None whenever
     #    the underlying file may have changed; opened when needed
     instance_ledger_name: typing.Optional[str]
-    instance_ledger: io.FileIO
+    instance_ledger_uncommitted: bool
 
     def __init__(self):
         self.instance_ledger_name = None
-        self.instance_ledger = None
+        self.instance_ledger_uncommitted = True
 
     @transaction()
     def pull_changes(self):
         """Pull the latest changes from the upstream git repo"""
-        if self.instance_ledger is not None:
-            self.instance_ledger.close()
-            self.instance_ledger = None
-
         try:
             subprocess.run("git pull --no-edit "
                            "|| ( git merge --abort; false; )",
@@ -256,36 +254,40 @@ class RepoData:
             raise
         except Exception as e:
             # Rollback
-            subprocess.run(["git", "checkout", "@{-1}"], check=True)
+            self.git_cmd("git", "checkout", "@{-1}")
             raise UpdateFailed("Failed to reload data") from e
 
-        self.open_instance_ledger()
-
-    def add_file(self, filename: str):
-        subprocess.run(["git", "add", filename],
+    def git_cmd(self, *args):
+        print("\x1b[1;31mGit command: \x1b[0m" + " ".join(args))
+        subprocess.run(list(args),
                        cwd=SERVER_CONFIG.DATA_DIR,
                        check=True)
+
+    def add_file(self, filename: str):
+        self.git_cmd("git", "add", filename)
 
     @contextlib.contextmanager
     def git_transaction(self):
         head = subprocess.check_output(["git", "rev-parse", "HEAD"],
                                        cwd=SERVER_CONFIG.DATA_DIR)
+        head = head.decode("utf-8").strip()
+        # I'm not completely sure this is the best approach:
+        # We want to minimize the risk of lost or corrupted data;
+        # that means that commits that don't push successfully
+        # should be kept. However, in case of an error *creating*
+        # the commit, we want to go back as far as we can
         try:
             # TODO: fetch first?
             yield
-            subprocess.run(["git", "push"],
-                           cwd=SERVER_CONFIG.DATA_DIR,
-                           check=True)
+            self.git_cmd("git", "commit", "-m", "Automatic commit")
+            self.git_cmd("git", "push")
         except Exception:
             # Rollback
-            subprocess.run(["git", "reset", "--hard", head],
-                           cwd=SERVER_CONFIG.DATA_DIR,
-                           check=True)
+            self.git_cmd("git", "reset", "--hard", head)
             raise
 
-    def open_instance_ledger(self) -> io.FileIO:
-        if self.instance_ledger is not None:
-            return self.instance_ledger
+    @property
+    def instance_ledger(self) -> typing.TextIO:
         while self.instance_ledger_name is None:
             import datetime
             import socket
@@ -293,44 +295,72 @@ class RepoData:
                 "hostname": socket.gethostname(),
                 "date": datetime.datetime.now(datetime.timezone.utc),
             }
-            with self.git_transaction():
-                try:
-                    path = os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", trial_name)
-                    with open(path, "xt"):
+            try:
+                path = os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", trial_name)
+                with open(path, "xt"):
+                    pass
+                print("Got instance ledger " + path)
+                self.instance_ledger_name = path
+            except FileExistsError:
+                import time
+                time.sleep(1)
+                continue
+        while self.instance_ledger_uncommitted:
+            try:
+                # We have an instance ledger; add it to git and push
+                with self.git_transaction():
+                    dynamic_filename = os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", "dynamic.beancount")
+                    include_line = 'include "%s"\n' % os.path.basename(self.instance_ledger_name)
+                    found_include = False
+                    with open(dynamic_filename, "rt") as dynamic:
+                        for line in dynamic:
+                            if line == include_line:
+                                found_include = True
+                    if not found_include:
+                        with open(dynamic_filename, "at") as dynamic:
+                            dynamic.write(include_line)
+                    with open(self.instance_ledger_name, "at"):
+                        # Make sure the file exists; it might have gotten destroyed by a failed push
                         pass
-                    print("Got instance ledger " + path)
-                    self.instance_ledger_name = path
-                except FileExistsError:
-                    import time
-                    time.sleep(1)
-                    continue
-                else:
-                    # We have an instance ledger; add it to git and push
-                    with open(os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", "dynamic.beancount"), "at") as dynamic:
-                        dynamic.write('include "%s"\n' % trial_name)
-                    self.add_file(os.path.join("ledger", trial_name))
+                    self.add_file(self.instance_ledger_name)
                     self.add_file(os.path.join("ledger", "dynamic.beancount"))
-        self.instance_ledger = open(self.instance_ledger_name, "at")
-        return self.instance_ledger
+                self.instance_ledger_uncommitted = False
+                break
+            except subprocess.SubprocessError:
+                self.pull_changes()
+                continue
 
-    def apply_txn(self, txn: Transaction):
+        return open(self.instance_ledger_name, "at")
+
+    @transaction()
+    def apply_txn(self, txn: Transaction) -> typing.List[Member]:
         bc_txn = txn.beancount_txn
 
         # Ensure that the transaction balances
         residual = bcinterp.compute_residual(bc_txn.postings)
-        tolerances = bcinterp.infer_tolerances(bc_txn.postings, {})
+        tolerances = bcinterp.infer_tolerances(bc_txn.postings, self.bc_options_map)
         assert residual.is_small(tolerances), "Imbalanced transaction generated"
 
         # add the transaction to the ledger
-        with self.git_transaction():
-            beancount.parser.printer.print_entry(bc_txn, file=self.instance_ledger)
-            self.add_file(self.instance_ledger_name)
+        while True:
+            try:
+                with self.git_transaction():
+                    beancount.parser.printer.print_entry(bc_txn, file=self.instance_ledger)
+                    self.instance_ledger.flush()
+                    self.add_file(self.instance_ledger_name)
+            except subprocess.SubprocessError:
+                self.pull_changes()
+            else:
+                break
 
+        changed_members = {}
         # Once it's durable, apply it to the live state
         for posting in bc_txn.postings:
             if posting.account in self.accounts_raw:
                 member = self.accounts_raw[posting.account]
-                member.balance.add_amount(posting.amount)
+                member.balance.add_amount(posting.units)
+                changed_members[member.internal_name] = member
+        return list(changed_members.values())
 
     @transaction()
     def load_data(self):
@@ -385,6 +415,7 @@ class RepoData:
         self.accounts_raw = accounts_raw
         self.accounts = accounts
         self.products = products
+        self.bc_options_map = options
 
     def close_instance_ledger(self):
         if self.instance_ledger is not None:
