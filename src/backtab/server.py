@@ -24,8 +24,9 @@ def accounts():
     return {
         name: {
             "display_name": member.display_name,
-            # The balance is negative in the ledger, because the accounts are seen from the hackerspace's viewpoint
-            "balance": str(-member.balance),
+            # The balance is negative in the ledger, because the
+            # accounts are seen from the hackerspace's viewpoint
+            "balance": str(-member.balance_eur),
         }
         for name, member in REPO_DATA.accounts.items()
     }
@@ -44,7 +45,7 @@ def update():
 def deposit():
     json = bottle.request.json
     txn = data_repo.DepositTxn(
-        member=REPO_DATA.accounts[json[""]],
+        member=REPO_DATA.accounts[json["member"]],
         amount =decimal.Decimal(json["amount"]),
     )
 

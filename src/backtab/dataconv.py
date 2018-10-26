@@ -50,10 +50,12 @@ product_types = dict(
     WATER="Water",
 )
 
+
 DONT_CLOSE={
     # Alex's account gets reused later
     "Liabilities:Bar:Members:Alex",
 }
+
 
 def to_decimal(number: typing.Union[str, float, int, bcdata.Decimal]) -> bcdata.Decimal:
     if type(number) is not str:

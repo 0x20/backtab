@@ -7,6 +7,8 @@ import subprocess
 import threading
 import typing
 import beancount.core.data as bcdata
+import beancount.core.inventory as bcinv
+import beancount.core.interpolate as bcinterp
 import beancount.loader
 import beancount.parser.printer
 import beancount.query.query
@@ -37,7 +39,7 @@ class Member:
     internal_name: str
     display_name: str
     account: str
-    balance: decimal.Decimal
+    balance: bcinv.Inventory
 
     def __init__(self, account):
         account_parts = account.split(":")
@@ -50,6 +52,11 @@ class Member:
             self.display_name = self.internal_name = account_parts[-1]
         self.account = account
         self.balance = decimal.Decimal("0.00")
+
+    @property
+    def balance_eur(self):
+        return self.balance.get_currency_units("EUR").number.quantize(
+            decimal.Decimal("0.00"), decimal.ROUND_HALF_EVEN)
 
 
 Payback = collections.namedtuple("Payback", {
@@ -69,7 +76,6 @@ class Product:
     currency: str
     price: decimal.Decimal
 
-    # These parameters must either both be set
     payback: typing.Optional[Payback]
 
     def __init__(self, definition):
@@ -107,26 +113,37 @@ class Transaction:
             date = datetime.datetime.utcnow()
         if isinstance(date, datetime.datetime):
             meta.update(
-                timestamp = str(datetime.datetime.utcnow()),
+                timestamp=str(datetime.datetime.utcnow()),
             )
             date = date.date()
         if title is None:
             raise TypeError("Title must be provided for a transaction")
         self.txn = bcdata.Transaction(
             meta, date,
-            flag = "txn",
+            flag="txn",
             payee=None,
-            narration=title
+            narration=title,
+            tags=set(),
+            links=set(),
+            postings=[],
         )
+
+    @property
+    def beancount_txn(self):
+        return self.txn
 
 
 class BuyTxn(Transaction):
-    def __init__(self, buyer: Member, products: typing.List[typing.Tuple[Product, int]], date: typing.Optional[datetime.datetime]=None):
-        super(BuyTxn, self).__init__(title = "%s bought some stuff" % buyer.display_name,
-                                     date=date,
-                                     meta={
-                                         "type": "purchase",
-                                     })
+    def __init__(self,
+                 buyer: Member,
+                 products: typing.List[typing.Tuple[Product, int]],
+                 date: typing.Optional[datetime.datetime]=None):
+        super(BuyTxn, self).__init__(
+            title="%s bought some stuff" % buyer.display_name,
+            date=date,
+            meta={
+                "type": "purchase",
+            })
         self.buyer = buyer
         charge = decimal.Decimal("0.00")
         paybacks = collections.defaultdict(lambda: decimal.Decimal("0.00"))
@@ -134,7 +151,8 @@ class BuyTxn(Transaction):
         for product, qty in products:
             charge += product.price * qty
             if product.payback is not None:
-                paybacks[product.payback.account] += product.payback.amount * qty
+                paybacks[product.payback.account] += \
+                    product.payback.amount * qty
             bcdata.create_simple_posting(
                 self.txn, "Assets:Inventory:Bar",
                 -qty, product.currency)
@@ -146,7 +164,7 @@ class BuyTxn(Transaction):
             self.txn, buyer.account,
             charge, "EUR"
         )
-        for payee,amt in paybacks.items():
+        for payee, amt in paybacks.items():
             bcdata.create_simple_posting(
                 self.txn, payee,
                 -amt, "EUR"
@@ -159,9 +177,16 @@ class BuyTxn(Transaction):
 
 
 class TransferTxn(Transaction):
-    def __init__(self, payer: Member, payee: Member, amount: decimal.Decimal, date: typing.Optional[datetime.datetime]=None):
+    def __init__(self,
+                 payer: Member,
+                 payee: Member,
+                 amount: decimal.Decimal,
+                 date: typing.Optional[datetime.datetime]=None):
         super(TransferTxn, self).__init__(
-            title = "%s gave %s a gift of €%s" %(payer.display_name, payee.display_name, amount) ,
+            title="%s gave %s a gift of €%s" % (
+                payer.display_name,
+                payee.display_name,
+                amount),
             date=date,
             meta={
                  "type": "transfer",
@@ -173,9 +198,12 @@ class TransferTxn(Transaction):
 
 
 class DepositTxn(Transaction):
-    def __init__(self, member: Member, amount: decimal.Decimal, date: typing.Optional[datetime.datetime]=None):
+    def __init__(self,
+                 member: Member,
+                 amount: decimal.Decimal,
+                 date: typing.Optional[datetime.datetime]=None):
         super(DepositTxn, self).__init__(
-            title = "%s gave %s a gift of €%s" %(payer.display_name, payee.display_name, amount) ,
+            title="%s deposited €%s" % (member.display_name, amount),
             date=date,
             meta={
                  "type": "deposit",
@@ -189,6 +217,7 @@ class DepositTxn(Transaction):
 
 class RepoData:
     accounts: typing.Dict[str, Member]
+    accounts_raw: typing.Dict[str, Member]
     products: typing.Dict[str, Product]
 
     # Invariants:
@@ -230,6 +259,8 @@ class RepoData:
             subprocess.run(["git", "checkout", "@{-1}"], check=True)
             raise UpdateFailed("Failed to reload data") from e
 
+        self.open_instance_ledger()
+
     def add_file(self, filename: str):
         subprocess.run(["git", "add", filename],
                        cwd=SERVER_CONFIG.DATA_DIR,
@@ -252,10 +283,10 @@ class RepoData:
                            check=True)
             raise
 
-    def open_instance_ledger(self):
+    def open_instance_ledger(self) -> io.FileIO:
         if self.instance_ledger is not None:
             return self.instance_ledger
-        while self.instance_ledger_name is not None:
+        while self.instance_ledger_name is None:
             import datetime
             import socket
             trial_name = "%(hostname)s_%(date)s.beancount" % {
@@ -267,6 +298,7 @@ class RepoData:
                     path = os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", trial_name)
                     with open(path, "xt"):
                         pass
+                    print("Got instance ledger " + path)
                     self.instance_ledger_name = path
                 except FileExistsError:
                     import time
@@ -282,7 +314,23 @@ class RepoData:
         return self.instance_ledger
 
     def apply_txn(self, txn: Transaction):
-        pass
+        bc_txn = txn.beancount_txn
+
+        # Ensure that the transaction balances
+        residual = bcinterp.compute_residual(bc_txn.postings)
+        tolerances = bcinterp.infer_tolerances(bc_txn.postings, {})
+        assert residual.is_small(tolerances), "Imbalanced transaction generated"
+
+        # add the transaction to the ledger
+        with self.git_transaction():
+            beancount.parser.printer.print_entry(bc_txn, file=self.instance_ledger)
+            self.add_file(self.instance_ledger_name)
+
+        # Once it's durable, apply it to the live state
+        for posting in bc_txn.postings:
+            if posting.account in self.accounts_raw:
+                member = self.accounts_raw[posting.account]
+                member.balance.add_amount(posting.amount)
 
     @transaction()
     def load_data(self):
@@ -309,9 +357,10 @@ class RepoData:
             raise UpdateFailed(error_stream.getvalue())
 
         accounts = {}
+        accounts_raw = {}
+        # TODO: Handle this using a realization
         balances = {
-            row.account: (row.balance.get_currency_units("EUR").number
-                          .quantize(decimal.Decimal("0.00")))
+            row.account: row.balance
             for row in beancount.query.query.run_query(ledger_data, options, """
                 select account, sum(position) as balance
                 where PARENT(account) = "Liabilities:Bar:Members"
@@ -330,8 +379,10 @@ class RepoData:
                 acct.display_name = entry.meta["display_name"]
             acct.balance = balances[acct.account]
             accounts[acct.internal_name] = acct
+            accounts_raw[acct.account] = acct
 
         # That's all the data loaded; now we update this class's fields
+        self.accounts_raw = accounts_raw
         self.accounts = accounts
         self.products = products
 
