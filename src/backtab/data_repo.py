@@ -83,6 +83,8 @@ class Product:
         self.localized_name = definition.get("localized_name", {})
         self.currency = definition["currency"]
         self.price = parse_price(definition["price"])
+        self.category = definition.get("category", "misc")
+        self.sort_key = definition.get("sort_key", "%s_%s" % (self.category, self.name))
         if "payback" in definition:
             self.payback = Payback(
                 account=definition["payback"]["account"],
@@ -99,6 +101,8 @@ class Product:
             "localized_name": self.localized_name,
             "currency": self.currency,
             "price": str(self.price),
+            "category": self.category,
+            "sort_key": self.sort_key,
         }
 
 
