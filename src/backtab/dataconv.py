@@ -21,18 +21,18 @@ product_types = dict(
     CURRY="Curry",
     DUVEL="Duvel",
     FANTA="Fanta",
-    FRITZ="Fritz Cola",
+    FRITZ="Fritz",
     JUPILER="Jupiler",
     GUINS="Guinness",
     STRKBIER="Heavy Beer",
     HOOD="Hoodie",
-    IJS="Ice Cream",
+    ICE_CREAM="Ice Cream",
     ICETEA="Ice Tea",
     JNVR="Jenever*",
     JNVRKOT="Jeneverkot",
     JOYLENT="Joylent",
-    JOILENTS="Joylent*",
-    KITKAT="KitKat",
+    JOYLENTS="Joylent*",
+    KITKAT="Kitkat",
     KRIEK="Kriek",
     LEFFE="Leffe",
     MNM="M&M",
@@ -40,16 +40,23 @@ product_types = dict(
     ORVL="Orval",
     PIZZA="Pizza",
     SNACK="Snack",
-    SNICK="Snickers",
+    SNICKERS="Snickers",
     SODA="Soda",
     SPRITE="Sprite",
-    TSHIRT="T-Shirt",
-    TSHIRTS="T-Shirt*",
+    TSHIRT="T-shirt",
     TEA="Tea",
-    TWX="Twix",
+    TWIX="Twix",
     WATER="Water",
+    WRISTBAND="Wristband",
+    WHOLENUM="whole #!",
 )
 
+product_types_inverse = {name: currency for currency, name in product_types.items()}
+product_types_inverse.update({
+    "T-shirt*": "TSHIRT",
+    "Wristband*": "WRISTBAND",
+    "Joylent*": "JOYLENT",
+})
 
 DONT_CLOSE={
     # Alex's account gets reused later
@@ -157,15 +164,28 @@ class Processor:
         initial_balance = to_decimal(takefrom["account_money"])
         account_name = self.get_member(takefrom["account_id"], takefrom["account_name"], txn.date, initial_balance)
 
-        bcdata.create_simple_posting(txn, account_name, amount, "EUR")
-        bcdata.create_simple_posting(txn, "Income:Bar", -amount, "EUR")
+        total_giveto_amount = to_decimal(0)
         if "giveto" in entry:
             for giveto in entry["giveto"]:
                 giveto_account = self.get_member(giveto["account_id"], giveto["account_name"], txn.date,
                                                  to_decimal(giveto["account_money"]))
                 giveto_amount = to_decimal(giveto["account_money_give"])
+                total_giveto_amount += giveto_amount
                 bcdata.create_simple_posting(txn, giveto_account, -giveto_amount, "EUR")
-                bcdata.create_simple_posting(txn, "Expenses:Bar", giveto_amount, "EUR")
+        bcdata.create_simple_posting(txn, account_name, amount, "EUR")
+        bcdata.create_simple_posting(txn, "Income:Bar", total_giveto_amount - amount, "EUR")
+
+
+        products = {}
+        for product in entry["products"]:
+            product_currency = product_types_inverse[product["product_name"]]
+            products[product_currency] = products.get(product_currency, 0) + 1
+
+        assert sum(products.values()) == entry["products_amount"]
+        for product_currency, qty in products.items():
+            bcdata.create_simple_posting(txn, "Assets:Inventory:Bar", -qty, product_currency)
+            bcdata.create_simple_posting(txn, account_name, qty, product_currency)
+
         # TODO: Report products purchased
 
         self.entries.append(txn)
