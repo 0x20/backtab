@@ -94,7 +94,6 @@ def main():
     # Load config
     SERVER_CONFIG.load_from_config("config.yml")
     REPO_DATA.pull_changes()
-    REPO_DATA.load_data()
 
     root = bottle.Bottle()
     root.mount('/api/v1', api)
