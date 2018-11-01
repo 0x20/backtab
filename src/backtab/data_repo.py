@@ -40,8 +40,9 @@ class Member:
     display_name: str
     account: str
     balance: bcinv.Inventory
+    item_currencies: typing.Set[str]
 
-    def __init__(self, account):
+    def __init__(self, account, item_curencies):
         account_parts = account.split(":")
         if account == "Assets:Cash:Bar":
             self.display_name = "--CASH--"
@@ -52,12 +53,20 @@ class Member:
             self.display_name = self.internal_name = account_parts[-1]
         self.account = account
         self.balance = decimal.Decimal("0.00")
+        self.item_currencies = item_curencies
 
     @property
     def balance_eur(self):
         return self.balance.get_currency_units("EUR").number.quantize(
             decimal.Decimal("0.00"), decimal.ROUND_HALF_EVEN)
 
+    @property
+    def item_count(self):
+        return sum(
+            int(self.balance.get_currency_units(currency).number.quantize(
+                decimal.Decimal("0"), decimal.ROUND_HALF_EVEN))
+            for currency in self.item_currencies
+        )
 
 Payback = collections.namedtuple("Payback", {
     "account": str,
@@ -381,6 +390,8 @@ class RepoData:
                 raise UpdateFailed("Duplicate product %s" % (product.name,))
             products[product.name] = product
 
+        product_currencies = {product.currency for product in products.values()}
+
         # Load ledger
         ledger_data, errors, options = beancount.loader.load_file(
             os.path.join(SERVER_CONFIG.DATA_DIR, "bartab.beancount")
@@ -409,6 +420,7 @@ class RepoData:
                 print("Didn't load %s as no balance found" % (entry.account,))
                 continue
             acct = Member(entry.account)
+            acct.item_currencies = product_currencies
             if "display_name" in entry.meta:
                 acct.display_name = entry.meta["display_name"]
             acct.balance = balances[acct.account]

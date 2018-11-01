@@ -26,6 +26,7 @@ def accounts():
             # The balance is negative in the ledger, because the
             # accounts are seen from the hackerspace's viewpoint
             "balance": str(-member.balance_eur),
+            "items": member.item_count,
         }
         for name, member in REPO_DATA.accounts.items()
     }
@@ -47,7 +48,10 @@ def json_txn_method(fn: typing.Callable[[typing.Dict], data_repo.Transaction]):
         member_deltas = REPO_DATA.apply_txn(txn)
         return {
             "members": {
-                member.internal_name: str(-member.balance_eur)
+                member.internal_name: {
+                    "balance": str(-member.balance_eur),
+                    "items": member.item_count,
+                }
                 for member in member_deltas
             },
             "message": txn.beancount_txn.narration,
