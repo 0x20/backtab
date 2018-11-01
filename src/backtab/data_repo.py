@@ -386,9 +386,9 @@ class RepoData:
             raise TypeError("Products should be a list")
         for raw_product in raw_products:
             product = Product(raw_product)
-            if product.name in products:
+            if product.currency in products:
                 raise UpdateFailed("Duplicate product %s" % (product.name,))
-            products[product.name] = product
+            products[product.currency] = product
 
         product_currencies = {product.currency for product in products.values()}
 
@@ -419,8 +419,7 @@ class RepoData:
             if entry.account not in balances:
                 print("Didn't load %s as no balance found" % (entry.account,))
                 continue
-            acct = Member(entry.account)
-            acct.item_currencies = product_currencies
+            acct = Member(entry.account, item_curencies=product_currencies)
             if "display_name" in entry.meta:
                 acct.display_name = entry.meta["display_name"]
             acct.balance = balances[acct.account]
