@@ -68,7 +68,7 @@ def deposit(json):
     )
 
 
-@api.post("/txn/deposit")
+@api.post("/txn/xfer")
 @json_txn_method
 def transfer(json):
     return data_repo.TransferTxn(
@@ -81,6 +81,7 @@ def transfer(json):
 @api.post("/txn/buy")
 @json_txn_method
 def buy(json):
+
     return data_repo.BuyTxn(
         buyer=REPO_DATA.accounts[json["member"]],
         products=[

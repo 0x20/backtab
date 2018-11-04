@@ -153,8 +153,14 @@ class BuyTxn(Transaction):
                  buyer: Member,
                  products: typing.List[typing.Tuple[Product, int]],
                  date: typing.Optional[datetime.datetime]=None):
+        total_cost = decimal.Decimal("0.00")
+        total_count = 0
+        for product, count in products:
+            total_count += count
+            total_cost += count * product.price
+
         super(BuyTxn, self).__init__(
-            title="%s bought some stuff" % buyer.display_name,
+            title="%s bought %d items for €%s" % (buyer.display_name, total_count, total_cost),
             date=date,
             meta={
                 "type": "purchase",
@@ -207,9 +213,9 @@ class TransferTxn(Transaction):
                  "type": "transfer",
             })
         bcdata.create_simple_posting(
-            self.txn, payer.account, -amount, "EUR")
+            self.txn, payer.account,  amount, "EUR")
         bcdata.create_simple_posting(
-            self.txn, payee.account,  amount, "EUR")
+            self.txn, payee.account, -amount, "EUR")
 
 
 class DepositTxn(Transaction):
