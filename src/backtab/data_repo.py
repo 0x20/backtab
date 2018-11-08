@@ -249,13 +249,17 @@ class RepoData:
     instance_ledger_name: typing.Optional[str]
     instance_ledger_uncommitted: bool
 
+    synchronized: bool
+
     def __init__(self):
         self.instance_ledger_name = None
         self.instance_ledger_uncommitted = True
+        self.synchronized = False
 
     @transaction()
     def pull_changes(self):
         """Pull the latest changes from the upstream git repo"""
+        self.synchronized = False
         try:
             subprocess.run("git pull --no-edit "
                            "|| ( git merge --abort; false; )",
@@ -268,13 +272,14 @@ class RepoData:
 
         try:
             self.load_data()
-        except UpdateFailed:
-            # Don't wrap an UpdateFailed
-            raise
         except Exception as e:
             # Rollback
             self.git_cmd("git", "checkout", "@{-1}")
-            raise UpdateFailed("Failed to reload data") from e
+            if isinstance(e, UpdateFailed):
+                raise
+            else:
+                raise UpdateFailed("Failed to reload data") from e
+        self.synchronized = True
 
     def git_cmd(self, *args):
         print("\x1b[1;31mGit command: \x1b[0m" + " ".join(args))
@@ -290,20 +295,21 @@ class RepoData:
         head = subprocess.check_output(["git", "rev-parse", "HEAD"],
                                        cwd=SERVER_CONFIG.DATA_DIR)
         head = head.decode("utf-8").strip()
-        # I'm not completely sure this is the best approach:
-        # We want to minimize the risk of lost or corrupted data;
-        # that means that commits that don't push successfully
-        # should be kept. However, in case of an error *creating*
-        # the commit, we want to go back as far as we can
         try:
-            # TODO: fetch first?
             yield
-            self.git_cmd("git", "commit", "-m", "Automatic commit")
-            self.git_cmd("git", "push")
+            self.git_cmd("git", "commit", "-m", "Automatic commit by backtab")
         except Exception:
-            # Rollback
             self.git_cmd("git", "reset", "--hard", head)
             raise
+
+        self.synchronized = False
+        try:
+            self.git_cmd("git", "push")
+        except subprocess.SubprocessError:
+            # Try pulling first
+            self.pull_changes()
+            self.git_cmd("git", "push")
+        self.synchronized = True
 
     @property
     def instance_ledger(self) -> typing.TextIO:
