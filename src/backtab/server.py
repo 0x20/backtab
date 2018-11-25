@@ -1,5 +1,7 @@
 import bottle
+import click
 import decimal
+import sdnotify
 from backtab.config import SERVER_CONFIG
 from backtab import data_repo
 from backtab.data_repo import REPO_DATA, UpdateFailed
@@ -98,11 +100,16 @@ def buy(json):
     )
 
 
-def main():
+@click.command()
+@click.option('-c', "--config-file", default="config.yml",
+              type=click.Path(dir_okay=False, resolve_path=True, exists=True))
+def main(config_file):
+    notifier = sdnotify.SystemdNotifier()
     # Load config
-    SERVER_CONFIG.load_from_config("config.yml")
+    SERVER_CONFIG.load_from_config(config_file)
     REPO_DATA.pull_changes()
 
+    notifier.notify("READY=1")
     root = bottle.Bottle()
     root.mount('/api/v1', api)
     bottle.run(root, host=SERVER_CONFIG.LISTEN_ADDR, port=SERVER_CONFIG.PORT)
