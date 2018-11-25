@@ -2,3 +2,4 @@ http:
         listen: '127.0.0.1'
         port: 4903
 datadir: /home/thequux/PycharmProjects/tab/tab-data
+slowdown: 0.6

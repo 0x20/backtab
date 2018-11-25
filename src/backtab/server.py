@@ -6,12 +6,17 @@ from backtab.data_repo import REPO_DATA, UpdateFailed
 from functools import wraps
 import typing
 import traceback
-
+import time
 api = bottle.Bottle()
 
 
+@api.get("/ping")
+def ping():
+    return "ok"
+
 @api.get("/products")
 def products():
+    time.sleep(SERVER_CONFIG.SLOWDOWN)
     return {
         name: product.to_json()
         for name, product in REPO_DATA.products.items()
@@ -20,6 +25,7 @@ def products():
 
 @api.get("/accounts")
 def accounts():
+    time.sleep(SERVER_CONFIG.SLOWDOWN)
     return {
         name: {
             "display_name": member.display_name,
@@ -34,6 +40,7 @@ def accounts():
 
 @api.get("/admin/update")
 def update():
+    time.sleep(SERVER_CONFIG.SLOWDOWN)
     try:
         REPO_DATA.pull_changes()
         return "Success"

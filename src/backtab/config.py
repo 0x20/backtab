@@ -14,6 +14,7 @@ class ConfigData:
     DATA_DIR: str = os.path.join(os.getcwd(), "mut_data")
     PORT: int = 80
     LISTEN_ADDR: str = "localhost"
+    SLOWDOWN: float = 0.1
 
     def load_from_config(self, configPath: str):
         import yaml
@@ -22,5 +23,6 @@ class ConfigData:
         self.DATA_DIR = get_path(config, "datadir", default=self.DATA_DIR)
         self.PORT = get_path(config, "http", "port", default=self.PORT)
         self.LISTEN_ADDR = get_path(config, "http", "listen", default=self.LISTEN_ADDR)
+        self.SLOWDOWN = get_path(config, "slowdown", default=self.SLOWDOWN)
 
 SERVER_CONFIG = ConfigData()
