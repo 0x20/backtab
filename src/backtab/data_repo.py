@@ -250,11 +250,13 @@ class RepoData:
     instance_ledger_uncommitted: bool
 
     synchronized: bool
+    repo_path: str
 
-    def __init__(self):
+    def __init__(self, repo_path=None):
         self.instance_ledger_name = None
         self.instance_ledger_uncommitted = True
         self.synchronized = False
+        self.repo_path = repo_path or SERVER_CONFIG.DATA_DIR
 
     @transaction()
     def pull_changes(self):
@@ -264,7 +266,7 @@ class RepoData:
             subprocess.run("git pull --no-edit "
                            "|| ( git merge --abort; false; )",
                            shell=True,
-                           cwd=SERVER_CONFIG.DATA_DIR,
+                           cwd=self.repo_path,
                            stderr=subprocess.PIPE,
                            check=True)
         except subprocess.CalledProcessError as e:
@@ -284,7 +286,7 @@ class RepoData:
     def git_cmd(self, *args):
         print("\x1b[1;31mGit command: \x1b[0m" + " ".join(args))
         subprocess.run(list(args),
-                       cwd=SERVER_CONFIG.DATA_DIR,
+                       cwd=self.repo_path,
                        check=True)
 
     def add_file(self, filename: str):
@@ -293,7 +295,7 @@ class RepoData:
     @contextlib.contextmanager
     def git_transaction(self):
         head = subprocess.check_output(["git", "rev-parse", "HEAD"],
-                                       cwd=SERVER_CONFIG.DATA_DIR)
+                                       cwd=self.repo_path)
         head = head.decode("utf-8").strip()
         try:
             yield
@@ -321,7 +323,7 @@ class RepoData:
                 "date": datetime.datetime.now(datetime.timezone.utc),
             }
             try:
-                path = os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", trial_name)
+                path = os.path.join(self.repo_path, "ledger", trial_name)
                 with open(path, "xt"):
                     pass
                 print("Got instance ledger " + path)
@@ -334,7 +336,7 @@ class RepoData:
             try:
                 # We have an instance ledger; add it to git and push
                 with self.git_transaction():
-                    dynamic_filename = os.path.join(SERVER_CONFIG.DATA_DIR, "ledger", "dynamic.beancount")
+                    dynamic_filename = os.path.join(self.repo_path, "ledger", "dynamic.beancount")
                     include_line = 'include "%s"\n' % os.path.basename(self.instance_ledger_name)
                     found_include = False
                     with open(dynamic_filename, "rt") as dynamic:
@@ -392,7 +394,7 @@ class RepoData:
         import yaml
 
         products = {}
-        with open(os.path.join(SERVER_CONFIG.DATA_DIR, "static", "products.yml"), "rt") as f:
+        with open(os.path.join(self.repo_path, "static", "products.yml"), "rt") as f:
             raw_products = yaml.load(f)
         if type(raw_products) != list:
             raise TypeError("Products should be a list")
@@ -406,7 +408,7 @@ class RepoData:
 
         # Load ledger
         ledger_data, errors, options = beancount.loader.load_file(
-            os.path.join(SERVER_CONFIG.DATA_DIR, "bartab.beancount")
+            os.path.join(self.repo_path, "bartab.beancount")
         )
         if errors:
             error_stream = io.StringIO("Failed to load ledger\n")
