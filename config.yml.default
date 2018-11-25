@@ -1,0 +1,5 @@
+http:
+  listen: '0.0.0.0'
+  port: 4903
+datadir: /srv/backtab/tab-data
+slowdown: 0

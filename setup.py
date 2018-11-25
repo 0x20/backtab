@@ -15,7 +15,7 @@ setuptools.setup(
         ]
     },
     install_requires=[
-        "click ~= 7.0"
+        "click ~= 7.0",
         "bottle ~= 0.12",
         "PyYAML ~= 3.13",
         "sdnotify ~= 0.3.1",
