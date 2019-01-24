@@ -25,4 +25,15 @@ class ConfigData:
         self.LISTEN_ADDR = get_path(config, "http", "listen", default=self.LISTEN_ADDR)
         self.SLOWDOWN = get_path(config, "slowdown", default=self.SLOWDOWN)
 
+        print("Config:\n"
+              "  DATA_DIR: %(DATA_DIR)s\n"
+              "  PORT: %(PORT)s\n"
+              "  LISTEN_ADDR: %(LISTEN_ADDR)s\n"
+              "  SLOWDOWN: %(SLOWDOWN)s" % dict(
+            DATA_DIR=self.DATA_DIR,
+            PORT=self.PORT,
+            LISTEN_ADDR=self.LISTEN_ADDR,
+            SLOWDOWN=self.SLOWDOWN,
+        ))
+
 SERVER_CONFIG = ConfigData()

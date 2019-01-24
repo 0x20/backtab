@@ -68,6 +68,7 @@ class Member:
             for currency in self.item_currencies
         )
 
+
 Payback = collections.namedtuple("Payback", {
     "account": str,
     "amount": decimal.Decimal,
@@ -160,7 +161,9 @@ class BuyTxn(Transaction):
             total_cost += count * product.price
 
         super(BuyTxn, self).__init__(
-            title="%s bought %d items for €%s" % (buyer.display_name, total_count, total_cost),
+            title="%s bought %d items for €%s (and has €%s remaining)" % (
+                buyer.display_name, total_count, total_cost, buyer.balance_eur - total_cost,
+            ),
             date=date,
             meta={
                 "type": "purchase",
@@ -250,13 +253,17 @@ class RepoData:
     instance_ledger_uncommitted: bool
 
     synchronized: bool
-    repo_path: str
+    _repo_path: str
 
     def __init__(self, repo_path=None):
         self.instance_ledger_name = None
         self.instance_ledger_uncommitted = True
         self.synchronized = False
-        self.repo_path = repo_path or SERVER_CONFIG.DATA_DIR
+        self._repo_path = repo_path or None
+
+    @property
+    def repo_path(self):
+        return self._repo_path or SERVER_CONFIG.DATA_DIR
 
     @transaction()
     def pull_changes(self):
