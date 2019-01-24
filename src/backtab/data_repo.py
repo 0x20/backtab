@@ -68,6 +68,7 @@ class Member:
             for currency in self.item_currencies
         )
 
+
 Payback = collections.namedtuple("Payback", {
     "account": str,
     "amount": decimal.Decimal,
@@ -160,7 +161,9 @@ class BuyTxn(Transaction):
             total_cost += count * product.price
 
         super(BuyTxn, self).__init__(
-            title="%s bought %d items for €%s" % (buyer.display_name, total_count, total_cost),
+            title="%s bought %d items for €%s (and has €%s remaining)" % (
+                buyer.display_name, total_count, total_cost, buyer.balance_eur - total_cost,
+            ),
             date=date,
             meta={
                 "type": "purchase",
