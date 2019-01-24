@@ -253,13 +253,17 @@ class RepoData:
     instance_ledger_uncommitted: bool
 
     synchronized: bool
-    repo_path: str
+    _repo_path: str
 
     def __init__(self, repo_path=None):
         self.instance_ledger_name = None
         self.instance_ledger_uncommitted = True
         self.synchronized = False
-        self.repo_path = repo_path or SERVER_CONFIG.DATA_DIR
+        self._repo_path = repo_path or None
+
+    @property
+    def repo_path(self):
+        return self._repo_path or SERVER_CONFIG.DATA_DIR
 
     @transaction()
     def pull_changes(self):
