@@ -39,7 +39,7 @@ case "$1" in
 	db_get backtab/listen_address
 	BACKTAB_HOST="$(echo "$RET" | sed -e 's/:.*//')"
 	BACKTAB_PORT="$(echo "$RET" |
-			     sed -Ee 's/[^:]*(:([0-9]+))?/\2/''s/[^:]*(:([0-9]+))?/\2/' \
+			     sed -Ee 's/[^:]*(:([0-9]+))?/\2/' \
 			     -e 's/^$/4903/'
 	)"
 
@@ -59,7 +59,7 @@ EOF
 	# This will be used by backtab's init script to initialize the git repo if necessary
 	printf "%s='%s'\n" BACKTAB_TEST_MODE "$TEST_MODE" BACKTAB_GIT_REMOTE "$GIT_REMOTE" >/var/lib/backtab/remote-config.env
 	
-	ucf /var/lib/backtab/config.yml /etc/backtab.yml
+	ucf --debconf-ok /var/lib/backtab/config.yml /etc/backtab.yml
 	ucfr backtab /etc/backtab.yml
     ;;
 

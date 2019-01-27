@@ -1,0 +1,15 @@
+[Unit]
+Description=Tab backend
+Wants=network.target
+After=network.target
+
+[Service]
+User=backtab
+Type=notify
+NotifyAccess=main
+ExecStartPre=/usr/bin/backtab-init-repo /var/lib/backtab/remote-config.env /var/lib/backtab/data
+ExecStart=/usr/bin/backtab-server -c /etc/backtab.yml
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

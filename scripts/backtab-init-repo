@@ -1,0 +1,26 @@
+#!/bin/sh -e
+
+# Usage: backtab-init-repo environment-file data-dir
+# The environment file must contain the following two definitions:
+# BACKTAB_TEST_MODE=[true|false]
+# BACKTAB_GIT_REMOTE=<url>
+#
+# If test mode is true, this will create a clone in $DATA_DIR.remote, and then clone that to $DATA_DIR
+# Otherwise, it will make the clone exist in $DATA_DIR
+
+. "$1"
+
+BACKTAB_DATA_DIR=$2
+
+if $BACKTAB_TEST_MODE; then
+    if ! [ -d "${BACKTAB_DATA_DIR}.remote" ]; then
+	git clone --bare --mirror "${BACKTAB_GIT_REMOTE}" "${BACKTAB_DATA_DIR}.remote"
+    fi
+    BACKTAB_GIT_REMOTE="${BACKTAB_DATA_DIR}.remote"
+fi
+
+if ! [ -d "${BACKTAB_DATA_DIR}" ]; then
+    git clone "${BACKTAB_GIT_REMOTE}" "${BACKTAB_DATA_DIR}"
+else
+    ( cd "${BACKTAB_DATA_DIR}" && git remote set-url origin "${BACKTAB_GIT_REMOTE}" )
+fi

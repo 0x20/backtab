@@ -15,10 +15,10 @@ setuptools.setup(
         ]
     },
     install_requires=[
-        "click ~= 7.0",
-        "bottle ~= 0.12",
-        "PyYAML ~= 3.13",
-        "sdnotify ~= 0.3.1",
+        "click >= 7.0, <8",
+        "bottle >= 0.12, <0.13",
+        "PyYAML >= 3.13, <4",
+        "sdnotify >= 0.3.1, <0.4",
         "beancount",
     ],
     dependency_links=[
