@@ -2,7 +2,7 @@
 import setuptools
 setuptools.setup(
     name="backtab",
-    version="1.0",
+    version="1.1",
     description="Backend for tab",
     author="TQ Hirsch <thequux@thequux.com>",
     license="MIT",

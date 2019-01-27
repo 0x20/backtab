@@ -1,0 +1,18 @@
+Template: backtab/listen_address
+Type: string
+Default: localhost:4903
+Description: The host:port that backtab should listen on.
+ If a port is not specified, it defaults to 4903
+
+Template: backtab/git_remote
+Type: string
+Default: http://github.com/0x20/tab-data
+Description: The URL that should be used as a git remote for backtab's data
+
+Template: backtab/test_mode
+Type: boolean
+Default: true
+Description: Whether the daemon should run in test mode
+ In test mode, we set the remote to be a locally-stored rep, so that changes
+ made to the data don't affect the public data. This way, test transactions
+ don't affect anybody's real balance.
