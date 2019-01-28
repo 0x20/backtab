@@ -118,6 +118,7 @@ class Product:
 
 class Transaction:
     txn: bcdata.Transaction
+    primary_account: typing.Optional[Member]
 
     def __init__(self,
                  title: str=None,
@@ -132,6 +133,7 @@ class Transaction:
                 timestamp=str(datetime.datetime.utcnow()),
             )
             date = date.date()
+        self.primary_account = None
         if title is None:
             raise TypeError("Title must be provided for a transaction")
         self.txn = bcdata.Transaction(
@@ -161,14 +163,14 @@ class BuyTxn(Transaction):
             total_cost += count * product.price
 
         super(BuyTxn, self).__init__(
-            title="%s bought %d items for €%s (and has €%s remaining)" % (
-                buyer.display_name, total_count, total_cost, buyer.balance_eur - total_cost,
+            title="%s bought %d items for €%s" % (
+                buyer.display_name, total_count, total_cost,
             ),
             date=date,
             meta={
                 "type": "purchase",
             })
-        self.buyer = buyer
+        self.primary_account = buyer
         charge = decimal.Decimal("0.00")
         paybacks = collections.defaultdict(lambda: decimal.Decimal("0.00"))
 
@@ -215,6 +217,7 @@ class TransferTxn(Transaction):
             meta={
                  "type": "transfer",
             })
+        self.primary_account = payer
         bcdata.create_simple_posting(
             self.txn, payer.account,  amount, "EUR")
         bcdata.create_simple_posting(
@@ -233,6 +236,7 @@ class DepositTxn(Transaction):
                  "type": "deposit",
             })
 
+        self.primary_account = member
         bcdata.create_simple_posting(
             self.txn, member.account, -amount, "EUR")
         bcdata.create_simple_posting(

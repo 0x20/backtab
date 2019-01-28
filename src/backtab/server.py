@@ -63,7 +63,10 @@ def json_txn_method(fn: typing.Callable[[typing.Dict], data_repo.Transaction]):
                 }
                 for member in member_deltas
             },
-            "message": txn.beancount_txn.narration,
+            "message": txn.beancount_txn.narration +
+                       (" (and now has €%s)" % (-txn.primary_account.balance_eur,)
+                        if txn.primary_account is not None
+                        else ""),
         }
     return result
 

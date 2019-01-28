@@ -1,3 +1,9 @@
+backtab (1.1.1) unstable; urgency=medium
+
+  * Fix the output of the new member balance
+
+ -- TQ Hirsch <thequux@thequux.com>  Mon, 28 Jan 2019 21:54:50 +0100
+
 backtab (1.1) unstable; urgency=medium
 
   * Initial Release.
