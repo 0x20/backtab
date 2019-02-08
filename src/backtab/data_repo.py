@@ -6,6 +6,7 @@ import os.path
 import subprocess
 import threading
 import typing
+import beancount.core.account as bcacct
 import beancount.core.data as bcdata
 import beancount.core.inventory as bcinv
 import beancount.core.interpolate as bcinterp
@@ -441,13 +442,13 @@ class RepoData:
         for entry in ledger_data:
             if not isinstance(entry, bcdata.Open):
                 continue
-            if entry.account not in balances:
-                print("Didn't load %s as no balance found" % (entry.account,))
+            if not bcacct.parent(entry.account) == "Liabilities:Bar:Members" and entry.account != "Assets:Cash:Bar":
+                print("Didn't load %s as it's no bar account" % (entry.account,))
                 continue
             acct = Member(entry.account, item_curencies=product_currencies)
             if "display_name" in entry.meta:
                 acct.display_name = entry.meta["display_name"]
-            acct.balance = balances[acct.account]
+            acct.balance = balances.get(acct.account, bcinv.Inventory())
             accounts[acct.internal_name] = acct
             accounts_raw[acct.account] = acct
 
