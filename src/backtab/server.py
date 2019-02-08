@@ -116,3 +116,6 @@ def main(config_file):
     root = bottle.Bottle()
     root.mount('/api/v1', api)
     bottle.run(root, host=SERVER_CONFIG.LISTEN_ADDR, port=SERVER_CONFIG.PORT)
+
+if __name__ == "__main__":
+    main()
