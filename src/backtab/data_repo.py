@@ -93,7 +93,7 @@ class Product:
         self.name = definition["name"]
         self.localized_name = definition.get("localized_name", {})
         self.currency = definition["currency"]
-        self.price = parse_price(definition["event_price"])
+        self.price = parse_price(definition["event_price" if SERVER_CONFIG.EVENT_MODE else "price"])
         self.category = definition.get("category", "misc")
         self.sort_key = definition.get("sort_key", "%s_%s" % (self.category, self.name))
         if "payback" in definition:

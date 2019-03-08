@@ -43,10 +43,15 @@ case "$1" in
 			     -e 's/^$/4903/'
 	)"
 
+	db_get backtab/event_mode
+	EVENT_MODE="$RET"
+
+
 	cat >/var/lib/backtab/config.yml <<EOF
 http:
         listen: '$BACKTAB_HOST'
         port: $BACKTAB_PORT
+event_mode: $EVENT_MODE
 datadir: /var/lib/backtab/data
 slowdown: 0
 EOF

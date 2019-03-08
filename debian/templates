@@ -16,3 +16,9 @@ Description: Whether the daemon should run in test mode
  In test mode, we set the remote to be a locally-stored rep, so that changes
  made to the data don't affect the public data. This way, test transactions
  don't affect anybody's real balance.
+
+Template: backtab/event_mode
+Type: boolean
+Default: false
+Description: Run in event mode
+ In event mode, most products have a higher price.

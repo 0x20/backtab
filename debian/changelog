@@ -1,3 +1,9 @@
+backtab (2019.3.8) unstable; urgency=medium
+
+  * Added event mode
+
+ -- TQ Hirsch <thequux@thequux.com>  Fri, 08 Mar 2019 18:04:03 +0100
+
 backtab (2019.2.8) unstable; urgency=medium
 
   * Fix new members not appearing before their first transaction

@@ -15,6 +15,7 @@ class ConfigData:
     PORT: int = 80
     LISTEN_ADDR: str = "localhost"
     SLOWDOWN: float = 0.1
+    EVENT_MODE: bool = False
 
     def load_from_config(self, configPath: str):
         import yaml
@@ -24,16 +25,19 @@ class ConfigData:
         self.PORT = get_path(config, "http", "port", default=self.PORT)
         self.LISTEN_ADDR = get_path(config, "http", "listen", default=self.LISTEN_ADDR)
         self.SLOWDOWN = get_path(config, "slowdown", default=self.SLOWDOWN)
+        self.EVENT_MODE = get_path(config, "event_mode", default=self.EVENT_MODE)
 
         print("Config:\n"
               "  DATA_DIR: %(DATA_DIR)s\n"
               "  PORT: %(PORT)s\n"
               "  LISTEN_ADDR: %(LISTEN_ADDR)s\n"
-              "  SLOWDOWN: %(SLOWDOWN)s" % dict(
+              "  SLOWDOWN: %(SLOWDOWN)s\n"
+              "  EVENT_MODE: %(EVENT_MODE)s\n" % dict(
             DATA_DIR=self.DATA_DIR,
             PORT=self.PORT,
             LISTEN_ADDR=self.LISTEN_ADDR,
             SLOWDOWN=self.SLOWDOWN,
+            EVENT_MODE=self.EVENT_MODE,
         ))
 
 SERVER_CONFIG = ConfigData()
