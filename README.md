@@ -52,6 +52,8 @@ backtab to use a ssh:// url; if so, add your SSH private key to
 
 Running natively
 ----------------
+**NOTE:**
+Backtab is currently not compatible with Python 3.9 or later. Please use Python 3.8.
 
 Check out a copy of your data repository wherever you find convenient.
 We'll call that location `/srv/backtab/tab-data`.
