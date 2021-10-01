@@ -1,7 +1,6 @@
 FROM python:3
 
 RUN mkdir /srv/backtab/
-#RUN apt-get -y update && apt-get install git mercurial
 WORKDIR /usr/src/app
 
 COPY requirements.txt  ./
