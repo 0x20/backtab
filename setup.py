@@ -19,9 +19,6 @@ setuptools.setup(
         "bottle >= 0.12, <0.13",
         "PyYAML >= 3.13, <4",
         "sdnotify >= 0.3.1, <0.4",
-        "beancount",
-    ],
-    dependency_links=[
-        "hg+https://bitbucket.org/blais/beancount#egg=beancount",
+        "beancount >= 2, < 3",
     ],
 )
