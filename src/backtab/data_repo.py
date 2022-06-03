@@ -42,6 +42,7 @@ class Member:
     account: str
     balance: bcinv.Inventory
     item_currencies: typing.Set[str]
+    is_paying_member: bool
 
     def __init__(self, account, item_curencies):
         account_parts = account.split(":")
@@ -55,6 +56,7 @@ class Member:
         self.account = account
         self.balance = decimal.Decimal("0.00")
         self.item_currencies = item_curencies
+        self.is_paying_member = False
 
     @property
     def balance_eur(self):
@@ -86,6 +88,7 @@ class Product:
     # inventory tracking. Should be short and all caps
     currency: str
     price: decimal.Decimal
+    paying_member_price: decimal.Decimal
 
     payback: typing.Optional[Payback]
 
@@ -94,6 +97,7 @@ class Product:
         self.localized_name = definition.get("localized_name", {})
         self.currency = definition["currency"]
         self.price = parse_price(definition["event_price" if SERVER_CONFIG.EVENT_MODE else "price"])
+        self.paying_member_price = parse_price(definition["paying_member_price"]) if "paying_member_price" in definition else self.price
         self.category = definition.get("category", "misc")
         self.sort_key = definition.get("sort_key", "%s_%s" % (self.category, self.name))
         if "payback" in definition:
@@ -161,7 +165,8 @@ class BuyTxn(Transaction):
         total_count = 0
         for product, count in products:
             total_count += count
-            total_cost += count * product.price
+            price = product.paying_member_price if buyer.is_paying_member else product.price
+            total_cost += count * price
 
         super(BuyTxn, self).__init__(
             title="%s bought %d items for €%s" % (
@@ -176,7 +181,8 @@ class BuyTxn(Transaction):
         paybacks = collections.defaultdict(lambda: decimal.Decimal("0.00"))
 
         for product, qty in products:
-            charge += product.price * qty
+            price = product.paying_member_price if buyer.is_paying_member else product.price
+            charge += price * qty
             if product.payback is not None:
                 paybacks[product.payback.account] += \
                     product.payback.amount * qty
@@ -448,6 +454,10 @@ class RepoData:
             acct = Member(entry.account, item_curencies=product_currencies)
             if "display_name" in entry.meta:
                 acct.display_name = entry.meta["display_name"]
+            if "is_paying_member" in entry.meta:
+                acct.is_paying_member = bool(entry.meta["is_paying_member"])
+                if acct.is_paying_member:
+                    acct.display_name += "*"
             acct.balance = balances.get(acct.account, bcinv.Inventory())
             accounts[acct.internal_name] = acct
             accounts_raw[acct.account] = acct
