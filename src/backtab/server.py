@@ -21,7 +21,7 @@ def products():
     time.sleep(SERVER_CONFIG.SLOWDOWN)
     return {
         name: product.to_json()
-        for name, product in REPO_DATA.products.items()
+        for name, product in filter(lambda item: item[1].visible, REPO_DATA.products.items())
     }
 
 

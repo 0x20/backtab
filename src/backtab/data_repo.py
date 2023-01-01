@@ -104,6 +104,11 @@ class Product:
             )
         else:
             self.payback = None
+        if "visible" in definition:
+            self.visible = definition["visible"]
+        else:
+            # default to hidden when visible attribute is missing
+            self.visible = False
 
     def to_json(self) -> typing.Dict:
         """Return the JSON form for clients. This does not include payback
