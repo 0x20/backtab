@@ -6,3 +6,5 @@ __pycache__
 .idea
 config.yml
 venv
+build
+dist
