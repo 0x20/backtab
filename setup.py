@@ -17,11 +17,8 @@ setuptools.setup(
     install_requires=[
         "click >= 7.0, <8",
         "bottle >= 0.12, <0.13",
-        "PyYAML >= 3.13, <4",
+        "PyYAML",
         "sdnotify >= 0.3.1, <0.4",
-        "beancount",
-    ],
-    dependency_links=[
-        "hg+https://bitbucket.org/blais/beancount#egg=beancount",
+        "beancount == 2.3.5",
     ],
 )

@@ -1,5 +1,6 @@
--e hg+https://bitbucket.org/blais/beancount#egg=beancount
+beancount == 2.3.5
 bottle >= 0.12, < 0.13
-PyYAML >= 3.13, <4
+PyYAML
+# >= 3.13, <4
 click >= 7.0, <8
 sdnotify >= 0.3.1, <0.4

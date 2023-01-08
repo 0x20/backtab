@@ -15,6 +15,7 @@ import beancount.parser.printer
 import beancount.query.query
 import collections
 import io
+import traceback
 
 repo_lock = threading.RLock()
 
@@ -103,6 +104,11 @@ class Product:
             )
         else:
             self.payback = None
+        if "visible" in definition:
+            self.visible = definition["visible"]
+        else:
+            # default to hidden when visible attribute is missing
+            self.visible = False
 
     def to_json(self) -> typing.Dict:
         """Return the JSON form for clients. This does not include payback
@@ -287,6 +293,9 @@ class RepoData:
         try:
             self.load_data()
         except Exception as e:
+            # Output error to assist in troubleshooting
+            print("Error while loading data: ")
+            traceback.print_exception(e)
             # Rollback
             self.git_cmd("git", "checkout", "@{-1}")
             if isinstance(e, UpdateFailed):
@@ -407,7 +416,7 @@ class RepoData:
 
         products = {}
         with open(os.path.join(self.repo_path, "static", "products.yml"), "rt") as f:
-            raw_products = yaml.load(f)
+            raw_products = yaml.load(f, Loader=yaml.SafeLoader)
         if type(raw_products) != list:
             raise TypeError("Products should be a list")
         for raw_product in raw_products:

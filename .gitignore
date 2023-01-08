@@ -4,3 +4,7 @@ __pycache__
 .#*
 *.ipynb
 .idea
+config.yml
+venv
+build
+dist

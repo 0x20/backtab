@@ -20,7 +20,7 @@ class ConfigData:
     def load_from_config(self, configPath: str):
         import yaml
         with open(configPath, "rt") as configFile:
-            config = yaml.load(configFile)
+            config = yaml.load(configFile, Loader=yaml.SafeLoader)
         self.DATA_DIR = get_path(config, "datadir", default=self.DATA_DIR)
         self.PORT = get_path(config, "http", "port", default=self.PORT)
         self.LISTEN_ADDR = get_path(config, "http", "listen", default=self.LISTEN_ADDR)

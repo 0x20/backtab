@@ -1,7 +1,7 @@
 Backtab
 =======
 
-This is the backend service for [tab-ui](https://github.com/0x20/tab-ui).
+This is the backend service for [tab-ui](https://github.com/0x20/tab-ui). The current recommended way to run this is Docker.
 
 Running on Docker
 -----------------
@@ -35,8 +35,10 @@ Finally, you can start the backend:
 
     docker start backtab
 
-Running natively (on Debian)
-----------------------------
+Running natively (on Debian) (deprecated)
+-----------------------------------------
+
+*This method is deprecated and the documentation is kept for historical purposes*
 
 Build a package using
 
