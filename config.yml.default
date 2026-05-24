@@ -3,3 +3,7 @@ http:
   port: 4903
 datadir: /srv/backtab/tab-data
 slowdown: 0
+# sumup:
+#   api_key: sup_sk_...
+#   merchant_code: MABCDEFG
+#   reader_id: rdr_...

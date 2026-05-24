@@ -1,7 +1,10 @@
 import bottle
 import click
 import decimal
+import json
 import sdnotify
+import urllib.error
+import urllib.request
 from backtab.config import SERVER_CONFIG
 from backtab import data_repo
 from backtab.data_repo import REPO_DATA, UpdateFailed
@@ -88,6 +91,34 @@ def transfer(json):
         payee=REPO_DATA.accounts[json["payee"]],
         amount=decimal.Decimal(json["amount"]),
     )
+
+
+@api.post("/sumup/push")
+def sumup_push():
+    if not (SERVER_CONFIG.SUMUP_API_KEY
+            and SERVER_CONFIG.SUMUP_MERCHANT
+            and SERVER_CONFIG.SUMUP_READER):
+        raise bottle.HTTPResponse(status=503, body="SumUp not configured")
+    amount = decimal.Decimal(bottle.request.json["amount"])
+    minor = int((amount * 100).to_integral_value())
+    url = "https://api.sumup.com/v0.1/merchants/%s/readers/%s/checkout" % (
+        SERVER_CONFIG.SUMUP_MERCHANT, SERVER_CONFIG.SUMUP_READER,
+    )
+    payload = json.dumps({
+        "total_amount": {"currency": "EUR", "minor_unit": 2, "value": minor},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=payload, method="POST",
+        headers={
+            "Authorization": "Bearer %s" % SERVER_CONFIG.SUMUP_API_KEY,
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return {"ok": True, "status": resp.status}
+    except urllib.error.HTTPError as e:
+        raise bottle.HTTPResponse(status=e.code, body=e.read())
 
 
 @api.post("/txn/buy")
